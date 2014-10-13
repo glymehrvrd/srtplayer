@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 from PyQt4 import QtCore, QtGui
@@ -9,7 +10,7 @@ class ControlMainWindow(QtGui.QLabel):
 
     def __init__(self, parent=None):
         super(ControlMainWindow, self).__init__(parent)
-        
+
         # make window frameless, topmost and transparent
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint |
                             QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
@@ -18,6 +19,10 @@ class ControlMainWindow(QtGui.QLabel):
 
         self.setWordWrap(True)
         self.setAlignment(QtCore.Qt.AlignCenter)
+
+        # context menu
+        self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.showContextMenu)
 
         # font config
         font = QtGui.QFont()
@@ -36,6 +41,33 @@ class ControlMainWindow(QtGui.QLabel):
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.onTimeout)
         self.timer.setSingleShot(True)
+
+    @QtCore.pyqtSlot(QtCore.QPoint)
+    def showContextMenu(self, pos):
+        '''
+        Show context menu
+        '''
+        globalPos = self.mapToGlobal(pos)
+        menu = QtGui.QMenu()
+        menu.addAction("Set time")
+        menu.addAction("Font")
+        menu.addSeparator()
+        menu.addAction("Exit")
+
+        selItem = menu.exec_(globalPos)
+        if selItem:
+            if selItem.text() == "Set time":
+                newStartTime, succ = QtGui.QInputDialog.getText(
+                    self, "Input start time", "", QtGui.QLineEdit.Normal, "00:00:00,000")
+                if succ:
+                    self.playSrt(
+                        pysrt.SubRipTime.from_string(unicode(newStartTime)))
+            elif selItem.text() == "Font":
+                font, succ = QtGui.QFontDialog.getFont(self.font(), self, 'Font')
+                if succ:
+                    self.setFont(font)
+            elif selItem.text() == "Exit":
+                self.close()
 
     @QtCore.pyqtSlot()
     def onTimeout(self):
@@ -72,7 +104,9 @@ class ControlMainWindow(QtGui.QLabel):
         def fp(a, b):
             c = a + (b - a) / 2
             if a > b:
-                return c # return nearest subtitle item if there is no subtitle at startTime
+                # return nearest subtitle item if there is no subtitle at
+                # startTime
+                return c
             elif startTime > self.subs[c].end:
                 return fp(c + 1, b)
             elif startTime < self.subs[c].start:
@@ -100,16 +134,6 @@ class ControlMainWindow(QtGui.QLabel):
             1000 + d.milliseconds
         self.timer.start(mil)
 
-    # def paintEvent(self, event):
-    #     painter = QtGui.QPainter(self)
-    # painter.setFont(QFont)
-
-    #     painter.setPen(QtGui.QColor(0, 0, 0, 200))
-    #     painter.drawText(1, 1, 800, 60, QtCore.Qt.AlignCenter, self.text())
-
-    #     painter.setPen(QtGui.QColor(0, 0, 0))
-    #     painter.drawText(0, 0, 800, 60, QtCore.Qt.AlignCenter, self.text())
-
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton:
             self.pos = event.globalPos()
@@ -123,13 +147,6 @@ class ControlMainWindow(QtGui.QLabel):
             self.moving = False
             if (event.globalPos() - self.pos) == QtCore.QPoint(0, 0):
                 self.openFile()
-
-        elif event.button() == QtCore.Qt.RightButton:
-            newStartTime, succ = QtGui.QInputDialog.getText(
-                self, "Input start time", "", QtGui.QLineEdit.Normal, "00:00:00,000")
-            if succ:
-                self.playSrt(
-                    pysrt.SubRipTime.from_string(unicode(newStartTime)))
 
     def mouseMoveEvent(self, event):
         if self.moving:

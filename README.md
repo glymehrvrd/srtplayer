@@ -1,4 +1,4 @@
-This is a simple srt player written with python and Qt.
+This is a simple srt player written in python and Qt.
 
 Operations:
 1. Left click to choose srt file.
