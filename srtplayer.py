@@ -4,7 +4,7 @@
 from PyQt4 import QtCore, QtGui
 import sys
 import pysrt
-
+import chardet
 
 class ControlMainWindow(QtGui.QLabel):
 
@@ -15,7 +15,7 @@ class ControlMainWindow(QtGui.QLabel):
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint |
                             QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-        self.setMinimumSize(800, 80)
+        self.setMinimumSize(1000, 180)
 
         self.setWordWrap(True)
         self.setAlignment(QtCore.Qt.AlignCenter)
@@ -37,6 +37,7 @@ class ControlMainWindow(QtGui.QLabel):
         self.moving = False
         self.pos = QtCore.QPoint(0, 0)
         self.subPos = 0
+        self.showing = False
 
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.onTimeout)
@@ -63,7 +64,8 @@ class ControlMainWindow(QtGui.QLabel):
                     self.playSrt(
                         pysrt.SubRipTime.from_string(unicode(newStartTime)))
             elif selItem.text() == "Font":
-                font, succ = QtGui.QFontDialog.getFont(self.font(), self, 'Font')
+                font, succ = QtGui.QFontDialog.getFont(
+                    self.font(), self, 'Font')
                 if succ:
                     self.setFont(font)
             elif selItem.text() == "Exit":
@@ -74,14 +76,29 @@ class ControlMainWindow(QtGui.QLabel):
         '''
         Change to next subtitle item.
         '''
-        self.setText(self.subs[self.subPos].text)
+        if self.showing:
+            self.showing = False
+            self.setText("")
 
-        # calc duration
-        d = self.subs[self.subPos].end - self.subs[self.subPos].start
-        mil = (((d.hours * 60) + d.minutes) * 60 + d.seconds) * \
-            1000 + d.milliseconds
+            # calc duration
+            d = self.subs[self.subPos + 1].start - self.subs[self.subPos].end
+            mil = (((d.hours * 60) + d.minutes) * 60 + d.seconds) * \
+                1000 + d.milliseconds
+            self.subPos += 1
 
-        self.subPos += 1
+            # if srt has finished
+            if self.subPos >= len(self.subs):
+                self.setText('Finished')
+                return
+        else:
+            self.showing = True
+            self.setText(self.subs[self.subPos].text)
+
+            # calc duration
+            d = self.subs[self.subPos].end - self.subs[self.subPos].start
+            mil = (((d.hours * 60) + d.minutes) * 60 + d.seconds) * \
+                1000 + d.milliseconds
+
         self.timer.start(mil)
 
     def openFile(self):
@@ -93,7 +110,12 @@ class ControlMainWindow(QtGui.QLabel):
             self, 'Open File', '~/', '*.srt;;*')
         if not filename:
             return
-        self.subs = pysrt.open(unicode(filename), encoding='cp936')
+        with open(filename, 'r') as f:
+            encoding = chardet.detect(f.read())['encoding']
+            if encoding == 'GB2312':
+                encoding = 'gbk'
+
+        self.subs = pysrt.open(unicode(filename), encoding=encoding)
         self.playSrt()
 
     def findPos(self, startTime):
@@ -118,15 +140,23 @@ class ControlMainWindow(QtGui.QLabel):
     def playSrt(self, startTime=0):
         if not hasattr(self, 'subs'):
             return
-        self.setText('')
+        self.setText('Empty')
         self.timer.stop()
+        self.showing = False
         self.subPos = self.findPos(startTime)
         d = self.subs[self.subPos].start - startTime
 
         # if already begins, then show it
         if d < 0:
             d = self.subs[self.subPos].end - startTime
-            self.setText(self.subs[self.subPos].text)
+            # if between intermit
+            if d < 0:
+                self.showing = False
+                d = self.subs[self.subPos + 1].start - startTime
+                self.setText('Empty')
+            else:
+                self.showing = True
+                self.setText(self.subs[self.subPos].text)
             self.subPos += 1
             print d
 
